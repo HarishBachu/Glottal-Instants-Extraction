@@ -17,7 +17,6 @@ class Generator:
             'deconv': 0
         }
 
-
     def get_layer_num(self, l_type, inc = True):
 
         if inc:
@@ -111,6 +110,9 @@ class Generator:
         gan = models.Model(inputs = inp, outputs = b22)
         return gan
 
+
+
+
 class Discriminator:
 
     def __init__(self):
@@ -121,6 +123,7 @@ class Discriminator:
             'bnorm': 0, 
             'ac': 0,
         }
+
 
     def get_layer_num(self, l_type, inc = True):
 
@@ -136,7 +139,6 @@ class Discriminator:
 
 
     def disc_block(self, n_filters, prev_input, padding = 'same'):
-        
         
         conv = layers.Conv1D(
             filters = n_filters, kernel_size = self.KERNEL_SIZE, strides = self.STRIDE, 

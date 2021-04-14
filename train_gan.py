@@ -1,5 +1,8 @@
 import numpy as np 
 from matplotlib import pyplot as plt 
+
+import librosa 
+
 import tensorflow as tf 
 from tensorflow.keras import models, layers 
 from tensorflow.keras import backend as K 
@@ -9,12 +12,17 @@ from tqdm import tqdm
 
 from segan_utils import Generator, Discriminator 
 
-def load_reals():
-    ...
-    #return real outputs
+speech_path = 'Dataset/Speech'
+egg_path = 'Dataset/EGG'
 
-def generate_reals():
-    ...
+def load_reals():
+    names = [i for i in tqdm(os.listdir(speech_path)) if i in os.listdir(egg_path)]
+    return names
+
+def generate_reals(names, batch_size):
+
+    idx = np.random.randint(0, len(names), batch_size).tolist()
+    inputs = 
     #return real samples
 
 def generate_latents():
@@ -42,14 +50,14 @@ class GAN:
 
     def create_gan(self):
 
-        self.gen = Generator() 
-        self.disc = Discriminator() 
-        self.disc.compile(loss = self.wasserstein_loss, optimizer = ...)
+        self.gen = Generator().construct()
+        self.disc = Discriminator().construct()
+        self.disc.compile(loss = self.wasserstein_loss, optimizer = 'adam')
 
         self.gan = models.Sequential()
         self.gan.add(self.gen)
         self.gan.add(self.disc) 
 
-        self.gan.compile(loss = self.wasserstein_loss, optimizer = ...)
-
-
+        self.gan.compile(loss = self.wasserstein_loss, optimizer = 'adam')
+ 
+        return self.gan 

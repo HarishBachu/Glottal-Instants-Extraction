@@ -57,9 +57,9 @@ class Generator:
         return ac 
 
 
-    def construct(self, input_shape = [16384, 1]):
+    def construct(self, input_shape = [16384, 1], batch_size = 40):
 
-        inp = layers.Input(shape = input_shape)
+        inp = layers.Input(shape = input_shape, batch_size = batch_size) #Add batch_size parameter
 
         b1 = self.gen_block(n_filters = 16, prev_input = inp, block_type = 'conv')
         b2 = self.gen_block(n_filters = 32, prev_input = b1, block_type = 'conv')
@@ -73,7 +73,8 @@ class Generator:
         b10 = self.gen_block(n_filters = 512, prev_input = b9, block_type = 'conv')
         b11 = self.gen_block(n_filters = 1024, prev_input = b10, block_type = 'conv')
 
-        concat = layers.Lambda(lambda x : tf.concat([x, tf.zeros_like(x)], axis = 2))(b11)
+        latent_layer = tf.random.uniform(shape = b11.shape)
+        concat = layers.Lambda(lambda x : tf.concat([x, latent_layer], axis = 2))(b11)
 
         b12 = self.gen_block(n_filters = 512, prev_input = concat, block_type = 'deconv')
         s1 = layers.add([b10, b12])
@@ -107,7 +108,7 @@ class Generator:
 
         b22 = self.gen_block(n_filters = 1, prev_input = s10, block_type = 'deconv', activation = 'tanh')
 
-        gan = models.Model(inputs = inp, outputs = b22)
+        gan = models.Model(inputs = inp, outputs = b22, name = 'Generator')
         return gan
 
 
@@ -173,5 +174,5 @@ class Discriminator:
         flatten = layers.Flatten(name = 'flatten')(compress)
         binary = layers.Dense(1, activation = 'sigmoid', name = 'binary_classifier')(flatten)
 
-        disc = models.Model(inputs = inp, outputs = binary)
+        disc = models.Model(inputs = inp, outputs = binary, name = 'Discriminator')
         return disc

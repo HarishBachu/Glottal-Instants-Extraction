@@ -30,7 +30,7 @@ def generate_outputs(names, batch_size):
 
 def generate_inputs(names, batch_size):
     #load inputs for generator
-    idx = np.random.randint(0, len(names, batch_size).tolist()
+    idx = np.random.randint(0, len(names, batch_size)).tolist()
     inputs = [librosa.load(os.path.join(speech_path, names[i]))[0] for i in idx]
     return inputs
 
@@ -82,7 +82,7 @@ class GAN:
 
             for i in trange(n_batches, desc = 'Epoch {}/{}'.format(epoch + 1, self.epochs), ncols = 100):
 
-                disc.trainable = False 
+                disc.trainable = True
 
                 X_real = generate_outputs(names, self.batch_size)
                 y_real = np.ones((self.batch_size, 1))
@@ -93,10 +93,14 @@ class GAN:
                 disc_loss_real, _ = disc.train_on_batch(X_real, y_real)
                 disc_loss_fake, _ = disc.train_on_batch(X_fake, y_fake) 
 
-                disc.trainable = True 
+                disc.trainable = False 
 
-                ... 
+                X_gan = generate_inputs(names, self.batch_size)
+                y_gan = np.ones((self.batch_size, 1))
 
+                gan_loss, gan_acc = self.gan.train_on_batch(X_gan, y_gan)
+
+            
         
 
 

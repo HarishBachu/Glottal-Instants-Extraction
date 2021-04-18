@@ -8,7 +8,7 @@ from tensorflow.keras import models, layers
 from tensorflow.keras import backend as K 
 
 import os 
-from tqdm import tqdm 
+from tqdm import tqdm, trange
 
 from segan_utils import Generator, Discriminator 
 
@@ -21,24 +21,43 @@ def load_reals():
     return names
 
 
-def generate_outputs(names, batch_size):
+def generate_outputs(names, batch_size, trim_size):
 
     idx = np.random.randint(0, len(names), batch_size).tolist()
-    outputs = [librosa.load(os.path.join(egg_path, names[i]))[0] for i in idx]
-    return outputs
+    outputs = []
+    for i in idx:
+        x = librosa.load(os.path.join(egg_path, names[i]))[0]
+        a = len(x)
+        lim = a - trim_size 
+        low = np.random.randint(0, lim)
+        high = low + trim_size 
+        x = x[low:high]
+        outputs.append(np.expand_dims(x, -1))
+
+    # outputs = [librosa.load(os.path.join(egg_path, names[i]))[0] for i in idx]
+    return np.asarray(outputs)
 
 
-def generate_inputs(names, batch_size):
+def generate_inputs(names, batch_size, trim_size):
     #load inputs for generator
-    idx = np.random.randint(0, len(names, batch_size)).tolist()
-    inputs = [librosa.load(os.path.join(speech_path, names[i]))[0] for i in idx]
-    return inputs
+    idx = np.random.randint(0, len(names), batch_size).tolist()
+    inputs = []
+    for i in idx:
+        x = librosa.load(os.path.join(speech_path, names[i]))[0]
+        a = len(x)
+        lim = a - trim_size 
+        low = np.random.randint(0, lim)
+        high = low + trim_size 
+        x = x[low:high]
+        inputs.append(np.expand_dims(x, -1))
+    # inputs = [librosa.load(os.path.join(speech_path, names[i]))[0] for i in idx]
+    return np.asarray(inputs)
 
 
-def generate_fakes(gen, names, batch_size):
+def generate_fakes(gen, names, batch_size, trim_size):
     #generate fake samples with generator
-    gen_input = generate_inputs(names, batch_size)
-    return gen(gen_input)
+    gen_input = generate_inputs(names, batch_size, trim_size)
+    return gen.predict(gen_input)
 
 
 class GAN:
@@ -46,7 +65,8 @@ class GAN:
     def __init__(self):
 
         self.input_shape = [16384, 1]
-        self.batch_size = 400
+        self.batch_size = 40
+        self.trim_size = 16384
         self.lr = 0.0002
         self.gan = None
         self.gen = None 
@@ -61,19 +81,19 @@ class GAN:
     
     def create_gan(self):
 
-        self.gen = Generator().construct()
+        self.gen = Generator().construct(batch_size = self.batch_size)
         
         self.disc = Discriminator().construct()
-        self.disc.compile(loss = self.wasserstein_loss, optimizer = 'adam')
+        self.disc.compile(loss = 'mse', optimizer = 'adam')
         self.disc.trainable = False 
 
         self.gan = models.Sequential([self.gen, self.disc]) 
 
-        self.gan.compile(loss = self.wasserstein_loss, optimizer = 'adam')
+        self.gan.compile(loss = 'mse', optimizer = 'adam')
  
     def train_gan(self):
 
-        gen, disc = selg.gan.layers 
+        gen, disc = self.gan.layers 
 
         names = load_reals()
         n_batches = len(names)//self.batch_size
@@ -84,10 +104,10 @@ class GAN:
 
                 disc.trainable = True
 
-                X_real = generate_outputs(names, self.batch_size)
+                X_real = generate_outputs(names, self.batch_size, self.trim_size)
                 y_real = np.ones((self.batch_size, 1))
 
-                X_fake = generate_fakes(gen, names, self.batch_size)
+                X_fake = generate_fakes(gen, names, self.batch_size, self.trim_size)
                 y_fake = np.zeros((self.batch_size, 1)) 
 
                 disc_loss_real, _ = disc.train_on_batch(X_real, y_real)
@@ -95,7 +115,7 @@ class GAN:
 
                 disc.trainable = False 
 
-                X_gan = generate_inputs(names, self.batch_size)
+                X_gan = generate_inputs(names, self.batch_size, self.trim_size)
                 y_gan = np.ones((self.batch_size, 1))
 
                 gan_loss, gan_acc = self.gan.train_on_batch(X_gan, y_gan)

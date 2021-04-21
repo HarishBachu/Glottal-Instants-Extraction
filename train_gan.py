@@ -51,13 +51,15 @@ def generate_inputs(names, batch_size, trim_size):
         x = x[low:high]
         inputs.append(np.expand_dims(x, -1))
     # inputs = [librosa.load(os.path.join(speech_path, names[i]))[0] for i in idx]
+    x = np.array(inputs)
+    # print(x.shape)
     return np.asarray(inputs)
 
 
 def generate_fakes(gen, names, batch_size, trim_size):
     #generate fake samples with generator
     gen_input = generate_inputs(names, batch_size, trim_size)
-    return gen.predict(gen_input)
+    return gen(gen_input)
 
 
 class GAN:

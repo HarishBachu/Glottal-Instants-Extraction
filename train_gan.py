@@ -40,24 +40,39 @@ def generate_outputs(names, batch_size, trim_size):
 
 def generate_inputs(names, batch_size, trim_size):
     #load inputs for generator
+    #print(0)
     idx = np.random.randint(0, len(names), batch_size).tolist()
+    #print(idx)
+    #print(1)
     inputs = []
     for i in idx:
         x = librosa.load(os.path.join(speech_path, names[i]))[0]
         a = len(x)
+        #print(a)
         lim = a - trim_size 
         low = np.random.randint(0, lim)
         high = low + trim_size 
         x = x[low:high]
         inputs.append(np.expand_dims(x, -1))
+    #print(3)
     # inputs = [librosa.load(os.path.join(speech_path, names[i]))[0] for i in idx]
-    return np.asarray(inputs)
+    #print(inputs.shape)
+    #print(inputs[0:10])
+    xd = np.asarray(inputs)
+    #print(xd.shape[0])
+    #print(xd[3:7])
+    print(xd.shape)
+    return xd
 
 
 def generate_fakes(gen, names, batch_size, trim_size):
     #generate fake samples with generator
     gen_input = generate_inputs(names, batch_size, trim_size)
-    return gen.predict(gen_input)
+    #print(type(gen_input))
+    #newar = np.asarray(gen_input).astype('float32')
+    #y = gen.predict(gen_input)
+    y = gen(gen_input)
+    return y
 
 
 class GAN:

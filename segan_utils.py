@@ -74,8 +74,9 @@ class Generator:
         b11 = self.gen_block(n_filters = 1024, prev_input = b10, block_type = 'conv')
 
         latent_layer = tf.random.uniform(shape = b11.shape, dtype = tf.dtypes.float32)
-        concat = layers.Lambda(lambda x : tf.concat(values = [x, latent_layer], axis = 2))(b11)
+        # concat = layers.Lambda(lambda x : tf.concat(values = [x, latent_layer], axis = 2))(b11)
 
+        concat = layers.Concatenate(name = 'concat_layer')([b11, latent_layer])
         b12 = self.gen_block(n_filters = 512, prev_input = concat, block_type = 'deconv')
         s1 = layers.add([b10, b12])
         

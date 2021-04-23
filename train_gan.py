@@ -56,11 +56,6 @@ def generate_inputs(names, batch_size, trim_size):
         inputs.append(np.expand_dims(x, -1))
     #print(3)
     # inputs = [librosa.load(os.path.join(speech_path, names[i]))[0] for i in idx]
-<<<<<<< HEAD
-    x = np.array(inputs)
-    # print(x.shape)
-    return np.asarray(inputs)
-=======
     #print(inputs.shape)
     #print(inputs[0:10])
     xd = np.asarray(inputs)
@@ -68,21 +63,16 @@ def generate_inputs(names, batch_size, trim_size):
     #print(xd[3:7])
     print(xd.shape)
     return xd
->>>>>>> atreya_fix
 
 
 def generate_fakes(gen, names, batch_size, trim_size):
     #generate fake samples with generator
     gen_input = generate_inputs(names, batch_size, trim_size)
-<<<<<<< HEAD
-    return gen(gen_input)
-=======
     #print(type(gen_input))
     #newar = np.asarray(gen_input).astype('float32')
     #y = gen.predict(gen_input)
     y = gen(gen_input)
     return y
->>>>>>> atreya_fix
 
 
 class GAN:

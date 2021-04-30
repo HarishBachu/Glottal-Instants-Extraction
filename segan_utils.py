@@ -14,7 +14,9 @@ class Generator:
         self.layer = {
             'conv': 0,
             'ac': 0,
-            'deconv': 0
+            'deconv': 0,
+            'bnorm': 0,
+            'dropout': 0
         }
 
     def get_layer_num(self, l_type, inc = True):
@@ -35,21 +37,26 @@ class Generator:
         if block_type == 'conv':
             conv = layers.Conv1D(
                 filters = n_filters, kernel_size = self.KERNEL_SIZE, strides = self.STRIDE, 
-                padding = padding, name = self.get_layer_name(l_type = 'conv'), 
-                kernel_regularizer = tf.keras.regularizers.l1(l1 = 100)
+                padding = padding, name = self.get_layer_name(l_type = 'conv'),
+                kernel_regularizer = tf.keras.regularizers.l2(l = 2.5e-5),
+                bias_regularizer = tf.keras.regularizers.l2(l = 2.5e-5)
             )(prev_input)
         else:
             conv = layers.Conv1DTranspose(
                 filters = n_filters, kernel_size = self.KERNEL_SIZE, strides = self.STRIDE, 
-                padding = padding, name = self.get_layer_name(l_type = 'deconv'), 
-                kernel_regularizer = tf.keras.regularizers.l1(l1 = 100)
+                padding = padding, name = self.get_layer_name(l_type = 'deconv'),
+                kernel_regularizer = tf.keras.regularizers.l2(l = 2.5e-5),
+                bias_regularizer = tf.keras.regularizers.l2(l = 2.5e-5)
             )(prev_input)
         
+        bn = layers.BatchNormalization(name = self.get_layer_name(l_type = "bnorm"))(conv)
+        dropout = layers.Dropout(0.3, name = self.get_layer_name(l_type = 'dropout'))(bn)
+
         if activation == 'prelu':
-            ac = layers.PReLU(name = self.get_layer_name(l_type = 'ac'))(conv)
+            ac = layers.PReLU(name = self.get_layer_name(l_type = 'ac'))(dropout)
         
         elif activation == 'tanh':
-            ac = layers.Activation('tanh', name = self.get_layer_name(l_type = 'ac'))(conv)
+            ac = layers.Activation('tanh', name = self.get_layer_name(l_type = 'ac'))(dropout)
         
         else:
             raise ValueError("Invalid Activation. Possible activations: prelu, tanh")
@@ -71,16 +78,16 @@ class Generator:
         b8 = self.gen_block(n_filters = 256, prev_input = b7, block_type = 'conv')
         b9 = self.gen_block(n_filters = 256, prev_input = b8, block_type = 'conv')
         b10 = self.gen_block(n_filters = 512, prev_input = b9, block_type = 'conv')
-        b11 = self.gen_block(n_filters = 1024, prev_input = b10, block_type = 'conv')
+        # b11 = self.gen_block(n_filters = 1024, prev_input = b10, block_type = 'conv')
 
-        latent_layer = tf.random.uniform(shape = b11.shape, dtype = tf.dtypes.float32)
+        latent_layer = tf.random.uniform(shape = b10.shape, dtype = tf.dtypes.float32)
         # concat = layers.Lambda(lambda x : tf.concat(values = [x, latent_layer], axis = 2))(b11)
 
-        concat = layers.Concatenate(name = 'concat_layer')([b11, latent_layer])
-        b12 = self.gen_block(n_filters = 512, prev_input = concat, block_type = 'deconv')
-        s1 = layers.add([b10, b12])
+        concat = layers.Concatenate(name = 'concat_layer')([b10, latent_layer])
+        # b12 = self.gen_block(n_filters = 512, prev_input = concat, block_type = 'deconv')
+        # s1 = layers.add([b10, b12])
         
-        b13 = self.gen_block(n_filters = 256, prev_input = s1, block_type = 'deconv')
+        b13 = self.gen_block(n_filters = 256, prev_input = concat, block_type = 'deconv')
         s2 = layers.add([b9, b13])
         
         b14 = self.gen_block(n_filters = 256, prev_input = s2, block_type = 'deconv')
@@ -124,6 +131,7 @@ class Discriminator:
             'conv': 0,
             'bnorm': 0, 
             'ac': 0,
+            'dropout': 0
         }
 
 
@@ -144,13 +152,14 @@ class Discriminator:
         
         conv = layers.Conv1D(
             filters = n_filters, kernel_size = self.KERNEL_SIZE, strides = self.STRIDE, 
-            padding = padding, name = self.get_layer_name(l_type = 'conv'), 
-            kernel_regularizer = tf.keras.regularizers.l1(l1 = 100)
+            padding = padding, name = self.get_layer_name(l_type = 'conv'),
+            kernel_regularizer = tf.keras.regularizers.l2(l = 2.5e-5),
+            bias_regularizer = tf.keras.regularizers.l2(l = 2.5e-5)
         )(prev_input)
 
         bnorm = layers.BatchNormalization(virtual_batch_size = 5, name = self.get_layer_name(l_type = 'bnorm'))(conv)        
-        
-        ac = layers.LeakyReLU(alpha = 0.3, name = self.get_layer_name(l_type = 'ac'))(bnorm)
+        dropout = layers.Dropout(0.3, name = self.get_layer_name(l_type = 'dropout'))(bnorm)
+        ac = layers.LeakyReLU(alpha = 0.3, name = self.get_layer_name(l_type = 'ac'))(dropout)
         return ac
 
 

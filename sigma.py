@@ -35,17 +35,13 @@ def zero_crossing_pos2neg(signal):
 
 def get_cluster(zc_pos2neg,ewgd,p_positive,sr_egg):
     feature_mat = np.zeros((len(zc_pos2neg),3))
-    # l_ = len(zc_pos2neg)
-    # print(l_)
-    # ideal = np.arange(19,-20,-1)
-    # ideal = np.arange(l_//2, -(l_//2 + 1), -1)
     R = int(0.0025*sr_egg)
         
     for i in range(len(zc_pos2neg)):
         ewgd_window = ewgd[zc_pos2neg[i] - int((R-1)/2):zc_pos2neg[i] + int((R-1)/2) + 1]
         l_ = len(ewgd_window)
         ideal = np.arange(l_//2, -(l_//2 + 1), -1)
-        feature_mat[i,0] = np.sqrt(np.mean(np.square(ewgd_window - ideal)))
+        feature_mat[i,0] = np.sqrt(np.mean(np.square(ewgd_window - ideal[:len(ewgd_window)])))
         p_pos_window = p_positive[zc_pos2neg[i] - int((R-1)/2):zc_pos2neg[i] + int((R-1)/2) + 1]
         feature_mat[i,1] = np.amax(p_pos_window**(1/3.))
         feature_mat[i,2] = np.sum(p_pos_window**(1/3.))

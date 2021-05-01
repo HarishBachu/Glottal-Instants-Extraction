@@ -1,6 +1,7 @@
 import numpy as np 
 from matplotlib import pyplot as plt 
 import random 
+from scipy import signal 
 
 import librosa 
 
@@ -12,7 +13,7 @@ import os
 from tqdm import tqdm, trange
 from statistics import mean
 
-from segan_utils import Generator, Discriminator 
+from segan_utils import Generator, Discriminator, Autoencoder
 
 speech_path = 'Dataset/Speech'
 egg_path = 'Dataset/EGG'
@@ -52,6 +53,7 @@ def generate_inputs(names, batch_size, trim_size):
     inputs = []
     for i in idx:
         x = librosa.load(os.path.join(speech_path, names[i]))[0]
+        x = librosa.effects.preemphasis(x, coef = 0.95)
         a = len(x)
         #print(a)
         lim = a - trim_size 
@@ -88,6 +90,7 @@ def generate_input_output_pairs(names, batch_size, trim_size):
     outputs = []
     for i in idx:
         x = librosa.load(os.path.join(speech_path, names[i]))[0]
+        # x = librosa.effects.preemphasis(x, coef = 0.95)
         y = librosa.load(os.path.join(egg_path, names[i]))[0]
         a = len(x)
         #print(a)
@@ -110,12 +113,12 @@ def generate_input_output_pairs(names, batch_size, trim_size):
     return xd, yd
 class GAN:
 
-    def __init__(self, input_shape = [1024, 1], batch_size = 100, trim_size = 1024, epochs = 100):
+    def __init__(self, input_shape = [1024, 1], batch_size = 40, trim_size = 1024, epochs = 100):
 
         self.input_shape = input_shape
         self.batch_size = batch_size
         self.trim_size = trim_size
-        self.lr = 0.0002
+        self.lr = 0.001
         self.gan = None
         self.gen = None 
         self.disc = None
@@ -151,7 +154,7 @@ class GAN:
     def make_prediction(self, gen, inp, actual):
 
         out = gen(inp)
-
+        out = signal.lfilter([1], [1, -0.95], out).astype(np.float32)
         plt.figure(figsize = (15, 20))
         plt.subplot(311)
         plt.plot(inp[0])
@@ -172,7 +175,7 @@ class GAN:
 
         gen, disc = self.gan.layers 
 
-        names = load_reals()
+        names = load_reals()[:100]
         n_batches = len(names)//self.batch_size
 
         for epoch in range(self.epochs):
@@ -183,6 +186,7 @@ class GAN:
                 target_signal = []
                 for __ in random_idx:
                         isig = librosa.load(os.path.join(speech_path, names[__]))[0]
+                        isig = librosa.effects.preemphasis(isig, coef = 0.95)
                         tsig = librosa.load(os.path.join(egg_path, names[__]))[0]
                         l = len(isig)
                         lim = l - self.trim_size
@@ -242,6 +246,152 @@ class GAN:
             if((epoch+1) % checkpoint_freq == 0):
                 self.save_model(gen, epoch)
             
-        
+class Autoenc:
 
+    def __init__(self, input_shape = [1024, 1], batch_size = 32, trim_size = 1024, epochs = 150):
+        self.input_shape = input_shape
+        self.batch_size = batch_size
+        self.trim_size = trim_size
+        self.lr = 0.0002
+        self.gan = None
+        self.gen = None 
+        self.disc = None
+        self.epochs = epochs
+
+    def create_autoencoder(self):
+
+        self.autoencoder = Autoencoder().construct(input_shape = self.input_shape)
+        self.autoencoder.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = self.lr), loss = tf.keras.losses.MeanSquaredError())
+
+    def make_prediction(self, inp, actual):
+
+        out = self.autoencoder.predict(inp)
+        # print(inp.shape)
+        # print(out.shape)
+        # out = signal.lfilter([1], [1, -0.95], out).astype(np.float32)
+        plt.figure(figsize = (15, 20))
+        plt.subplot(311)
+        plt.plot(inp[0])
+        plt.title("Input Signal")
+        plt.subplot(312)
+        plt.plot(out[0])
+        plt.title("Predicted EGG")
+        plt.subplot(313)
+        plt.plot(actual[0])
+        plt.title("Actual EGG")
+        plt.show()
+
+    def load_data(self):
+        dataset = 'Dataset'
+        egg = []
+        speech = []
+
+        n = 0
+        for i in tqdm(os.listdir(dataset + "/Speech")):
+            n += 1
+            egg_sample,_ = librosa.load(dataset + "/EGG" + "/" + i)
+            speech_sample,_ = librosa.load(dataset + "/Speech" + "/" + i)
+            egg.append(egg_sample)
+            speech.append(speech_sample)
+            # if n == 100:
+            #     break
+        return speech, egg
+
+    def trim_data(self, speech, egg):
+        egg_dataset = []
+        speech_dataset = []
+
+        for i in range(len(egg)):
+            for j in range(len(egg[i])//self.trim_size):
+                egg_dataset.append(egg[i][self.trim_size*j:self.trim_size*(j+1)])
+                speech_dataset.append(speech[i][self.trim_size*j:self.trim_size*(j+1)])
+
+        egg_dataset = np.array(egg_dataset)
+        speech_dataset = np.array(speech_dataset)
+        return speech_dataset, egg_dataset
+
+    def save_model(self, epoch):
+        print("Checkpoint created at epoch {}".format(epoch))
+        self.autoencoder.save('Checkpoint_{}_{}'.format(epoch, self.epochs))
+
+    def train_autoencoder(self, checkpoint_freq = 5, plot_freq = 5):
+
+        names = load_reals()
+
+        speech_dataset, egg_dataset = self.load_data()
+        speech_dataset, egg_dataset = self.trim_data(speech_dataset, egg_dataset)
+        n = len(speech_dataset)
+        X_train = speech_dataset[:int(n*0.95)]
+        Y_train = egg_dataset[:int(n*0.95)]
+        X_val = speech_dataset[int(n*0.95):int(n*0.975)]
+        Y_val = egg_dataset[int(n*0.95):int(n*0.975)]
+        X_test = speech_dataset[int(n*0.975):]
+        Y_test = egg_dataset[int(n*0.975):]
+
+        del egg_dataset,speech_dataset
+
+        n_batches = len(names)//self.batch_size
+
+        # X_auto = generate_input_output_pairs(names, len(names), self.trim_size)
+        n_epochs_per_plot = self.epochs//plot_freq 
+        # for epoch in range(n_epochs_per_plot)
+        for i in range(self.epochs//checkpoint_freq):
+            self.autoencoder.fit(
+                X_train, Y_train, 
+                batch_size = self.batch_size, 
+                epochs = checkpoint_freq, 
+                shuffle = True,
+                validation_data = (X_val, Y_val)
+            )
+
+            random_idx = np.random.randint(0, len(names))
+            input_signal = []
+            target_signal = []
+            input_signal = librosa.load(os.path.join(speech_path, names[random_idx]))[0]
+            target_signal = librosa.load(os.path.join(egg_path, names[random_idx]))[0]
+            l = len(input_signal)
+            lim = l - self.trim_size
+            low = np.random.randint(0, lim)
+            high = low + self.trim_size 
+            input_signal = input_signal[low:high]
+            target_signal = target_signal[low:high]
+            input_signal = np.asarray(input_signal)
+            target_signal = np.asarray(target_signal)
+            input_signal = np.expand_dims(input_signal, -1)
+            target_signal = np.expand_dims(target_signal, -1)
+            self.make_prediction(np.expand_dims(input_signal, 0), np.expand_dims(target_signal, 0))
+            self.save_model((i+1)*checkpoint_freq)
+        # for epoch in range(self.epochs):
+
+        #     if(epoch % plot_freq == plot_freq - 1):
+        #         random_idx = np.random.randint(0, len(names), self.batch_size)
+        #         input_signal = []
+        #         target_signal = []
+        #         for __ in random_idx:
+        #                 isig = librosa.load(os.path.join(speech_path, names[__]))[0]
+        #                 # isig = librosa.effects.preemphasis(isig, coef = 0.95)
+        #                 tsig = librosa.load(os.path.join(egg_path, names[__]))[0]
+        #                 l = len(isig)
+        #                 lim = l - self.trim_size
+        #                 low = np.random.randint(0, lim)
+        #                 high = low + self.trim_size 
+        #                 isig = isig[low:high]
+        #                 tsig = tsig[low:high]
+        #                 input_signal.append(np.expand_dims(isig, -1))
+        #                 target_signal.append(np.expand_dims(tsig, -1))
+        #         input_signal = np.asarray(input_signal)
+        #         target_signal = np.asarray(target_signal)
+        #         self.make_prediction(input_signal, target_signal)
+
+        #     # training_loop = trange(n_batches, desc = 'Epoch {}/{}'.format(epoch + 1, self.epochs), ncols = 100)
+        #     # for i in training_loop:
+        #     for i in range(n_batches):
+        #         X_auto = generate_input_output_pairs(names, self.batch_size, self.trim_size)
+        #         # al = self.autoencoder.train_on_batch(X_auto[0], X_auto[1])
+        #         # training_loop.set_postfix({
+        #         #     "Loss" : al
+        #         # })
+        #         self.autoencoder.fit(X_auto[0], X_auto[1], epochs = 1)
+        #     if((epoch+1) % checkpoint_freq == 0):
+        #         self.save_model(epoch)
 

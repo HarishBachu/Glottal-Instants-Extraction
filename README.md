@@ -1,5 +1,4 @@
 # Glottal-Instants-Extraction
-SAP Project (in progress)
 
 Dataset Source: CMU Arctic Database 
 

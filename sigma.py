@@ -6,25 +6,35 @@ import numpy as np
 import librosa
 import pywt
 from sklearn.mixture import GaussianMixture
-from matplotlib import pyplot as plt 
+# from numpy.lib.stride_tricks import sliding_window_view
+import matplotlib.pyplot as plt 
+
+
+def sliding_window_view(signal, window_shape):
+    y = []
+    l = signal.shape[0]
+
+    for i in range(0, l - window_shape):
+        y.append(signal[i:i+window_shape])
+
+    return np.asarray(y)
 
 def energy_weighted_group_delay(signal,sr_egg):
     
     R = int(0.0025*sr_egg)
-    group_delay = np.zeros((len(signal) - R + 1, R))
     mult = np.arange(R)
-    
-    for i in range(len(signal) - R + 1):
-        X = np.fft.fft(signal[i:i+R])
-        X_r = np.fft.fft(signal[i:i+R]*mult)
-        group_delay[i] = np.real(X_r/X)
-
-    ewgd = np.zeros(len(signal) - R + 1)
-    
-    for i in range(len(signal) - R + 1):
-        X_sq = np.square(np.abs(np.fft.fft(signal[i:i+R])))
-        ewgd[i] = np.sum(X_sq*group_delay[i])/np.sum(X_sq)
         
+    # X = np.lib.stride_tricks.sliding_window_view(signal,window_shape = (R))
+    X = sliding_window_view(signal, R)
+    X_r = X*mult
+    
+    X = np.fft.fft(X,axis = 1)
+    X_r = np.fft.fft(X_r,axis = 1)    
+    
+    group_delay = np.real(X_r/X)
+    X_sq = np.square(np.abs(X))
+    ewgd = np.sum(X_sq*group_delay,axis = 1)/np.sum(X_sq,axis = 1)
+    
     ewgd -= (R - 1)/2.
     
     return ewgd
@@ -35,12 +45,13 @@ def zero_crossing_pos2neg(signal):
 
 def get_cluster(zc_pos2neg,ewgd,p_positive,sr_egg):
     feature_mat = np.zeros((len(zc_pos2neg),3))
+
     R = int(0.0025*sr_egg)
+    
+    ideal = np.arange(R//2,-(R+1)//2,-1)
         
     for i in range(len(zc_pos2neg)):
         ewgd_window = ewgd[zc_pos2neg[i] - int((R-1)/2):zc_pos2neg[i] + int((R-1)/2) + 1]
-        l_ = len(ewgd_window)
-        ideal = np.arange(l_//2, -(l_//2 + 1), -1)
         feature_mat[i,0] = np.sqrt(np.mean(np.square(ewgd_window - ideal[:len(ewgd_window)])))
         p_pos_window = p_positive[zc_pos2neg[i] - int((R-1)/2):zc_pos2neg[i] + int((R-1)/2) + 1]
         feature_mat[i,1] = np.amax(p_pos_window**(1/3.))
@@ -78,10 +89,10 @@ def goi_post_processing(goi_candidates,gci,sr_egg):
                 goi.append(gci[i] + int((gci[i+1]-gci[i])*0.5))
     return goi 
 
-def get_glottal(egg, sr_egg):
+def get_glottal(egg,sr_egg):
     
-    # if len(egg)%8 != 0:
-    #     egg = egg[:-(len(egg)%8)]
+    if len(egg)%8 != 0:
+        egg = egg[:-(len(egg)%8)]
     
     swt = pywt.swt(egg, wavelet = "bior1.5", level = 3)
     multiscale_product = swt[0][1]*swt[1][1]*swt[2][1]
@@ -119,6 +130,69 @@ def get_glottal(egg, sr_egg):
     
     return gci,goi
 
+def naylor_metrics(ref_signal, est_signal):
+
+    assert (np.squeeze(ref_signal).ndim == 1)
+    assert (np.squeeze(est_signal).ndim == 1)
+
+    ref_signal = np.squeeze(ref_signal)
+    est_signal = np.squeeze(est_signal)
+
+    min_f0 = 50
+    max_f0 = 500
+    min_glottal_cycle = 1 / max_f0
+    max_glottal_cycle = 1 / min_f0
+
+    nHit = 0
+    nMiss = 0
+    nFalse = 0
+    nCycles = 0
+    highNumCycles = 100000
+    estimation_distance = np.full(highNumCycles, np.nan)
+
+    ref_fwdiffs = np.diff(ref_signal)[1:]
+    ref_bwdiffs = np.diff(ref_signal)[:-1]
+
+    for i in range(len(ref_fwdiffs)):
+        ref_cur_sample = ref_signal[i + 1]
+        ref_dist_fw = ref_fwdiffs[i]
+        ref_dist_bw = ref_bwdiffs[i]
+
+        dist_in_allowed_range = min_glottal_cycle <= ref_dist_fw <= max_glottal_cycle and min_glottal_cycle <= ref_dist_bw <= max_glottal_cycle
+        if dist_in_allowed_range:
+
+            cycle_start = ref_cur_sample - ref_dist_bw / 2
+            cycle_stop = ref_cur_sample + ref_dist_fw / 2
+
+            est_GCIs_in_cycle = est_signal[np.logical_and(est_signal > cycle_start, est_signal < cycle_stop)]
+            n_est_in_cycle = np.count_nonzero(est_GCIs_in_cycle)
+
+            nCycles += 1
+
+            if n_est_in_cycle == 1:
+                nHit += 1
+                estimation_distance[nHit] = est_GCIs_in_cycle[0] - ref_cur_sample
+            elif n_est_in_cycle < 1:
+                nMiss += 1
+            else:
+                nFalse += 1
+
+    estimation_distance = estimation_distance[np.invert(np.isnan(estimation_distance))]
+
+    identification_rate = nHit / nCycles
+    miss_rate = nMiss / nCycles
+    false_alarm_rate = nFalse / nCycles
+    identification_accuracy = 0 if np.size(estimation_distance) == 0 else np.std(estimation_distance)
+
+    return {
+        'identification_rate': identification_rate,
+        'miss_rate': miss_rate,
+        'false_alarm_rate': false_alarm_rate,
+        'identification_accuracy': identification_accuracy
+    }
+
+
+
 def plot(egg,speech,gci,goi, trim = None, title = "Plot"):
     # window_start = 0
     # window_length = 16384
@@ -129,7 +203,7 @@ def plot(egg,speech,gci,goi, trim = None, title = "Plot"):
     gci_plot[gci] = 0.025
     goi_plot[goi] = -0.025
 
-    plt.figure(figsize = (20, 20))
+    plt.figure(figsize = (20, 12))
     
     # plt.plot(speech[window_start:window_start+window_length])
     plt.subplot(411)

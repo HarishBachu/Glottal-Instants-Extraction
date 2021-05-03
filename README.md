@@ -12,6 +12,7 @@ Task: Glottal Instants Extraction using SEGAN and SIGMA Algorithm
 [Dataset](Dataset)\
 [Autoencoder Class declaration](segan_utils.py)\
 [Creating and training loop for Autoencoder](train_gan.py)\
+[Training and Evaluation of GAN Model](SEGAN-WASSERSTEIN-FINAL.ipynb)\
 [Training and saving Autoencoder model checkpoints](train_autoencoder.ipynb)\
 [Trained Autoencoder Models](models)\
 [Viewing model performance for given checkpoint](view_performance.py)\

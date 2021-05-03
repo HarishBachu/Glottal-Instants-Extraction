@@ -17,4 +17,4 @@ Task: Glottal Instants Extraction using SEGAN and SIGMA Algorithm
 [Trained Autoencoder Models](models)\
 [Viewing model performance for given checkpoint](view_performance.py)\
 [GCI and GOI extraction and Naylor's metrics](sigma.py)\
-[Metrics Evaluation for trained models](SIGMA_Algorithm.ipynb)\
+[Metrics Evaluation for trained models](SIGMA_Algorithm.ipynb)
